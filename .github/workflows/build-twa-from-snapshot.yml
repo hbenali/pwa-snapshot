@@ -115,12 +115,6 @@ jobs:
           echo "theme_color=$(jq -r '.themeColor' snapshot/meta.json)" >> $GITHUB_OUTPUT
           echo "start_url=$(jq -r '.startUrl' snapshot/meta.json)"     >> $GITHUB_OUTPUT
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: "17"
-          distribution: "temurin"
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -141,7 +135,7 @@ jobs:
       - name: Init Bubblewrap project
         run: |
           mkdir twa-android && cd twa-android
-          echo "n" | bubblewrap init \
+          echo "Y" | bubblewrap init \
             --manifest "http://localhost:8765/manifest.json" \
             --directory . \
             --packageId "${{ inputs.app_id }}" \
