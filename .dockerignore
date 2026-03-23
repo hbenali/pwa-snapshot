@@ -1,0 +1,8 @@
+node_modules
+*.zip
+.git
+.gitignore
+*.md
+.env*
+dist/
+coverage/

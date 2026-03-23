@@ -1,0 +1,16 @@
+services:
+  pwa-snapshot:
+    build: .
+    image: pwa-snapshot:latest
+    # Mount a local directory to retrieve the output zip
+    volumes:
+      - ./dist:/output
+    # All config via environment variables.
+    # Copy .env.example → .env and fill in your values.
+    env_file:
+      - .env
+    # Alternatively, inline specific variables:
+    # environment:
+    #   PWA_URL: https://myapp.example.com
+    #   ICON_SIZES: 192,512
+    #   VERBOSE: "1"
