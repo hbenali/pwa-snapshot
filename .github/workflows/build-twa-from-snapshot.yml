@@ -141,7 +141,7 @@ jobs:
       - name: Init Bubblewrap project
         run: |
           mkdir twa-android && cd twa-android
-          bubblewrap init \
+          echo "n" | bubblewrap init \
             --manifest "http://localhost:8765/manifest.json" \
             --directory . \
             --packageId "${{ inputs.app_id }}" \
@@ -195,26 +195,52 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install PWABuilder CLI + serve
-        run: npm install -g @pwabuilder/cli serve
+      - name: Install PWABuilder CLI
+        run: |
+          npm install -g @pwabuilder/cli
+          # Verify installation
+          which pwabuilder || echo "pwabuilder not found in PATH"
+          pwabuilder --version || echo "pwabuilder command failed"
+
+      - name: Install serve
+        run: npm install -g serve
 
       - name: Serve snapshot locally
         run: |
+          # Start serve in background
           serve snapshot/ -p 8765 &
-          sleep 2
+          # Wait for server to start
+          sleep 3
+          # Verify server is running
+          curl -sf http://localhost:8765/manifest.json || echo "Failed to serve manifest"
 
       - name: Generate iOS package
         run: |
-          pwabuilder package \
+          # Use npx to run pwabuilder if global install fails
+          npx @pwabuilder/cli package \
             --platform ios \
             --url "http://localhost:8765/manifest.json" \
             --output ./ios-output
+
+      - name: List output directory
+        run: |
+          echo "Contents of ios-output:"
+          ls -la ios-output/ || echo "ios-output directory not found"
+          echo "Looking for zip files:"
+          find ./ios-output -name "*.zip" 2>/dev/null || echo "No zip files found"
 
       - name: Find generated zip
         id: find_zip
         run: |
           ZIP=$(find ./ios-output -name "*.zip" | head -1)
+          if [[ -z "$ZIP" ]]; then
+            echo "Error: No zip file generated"
+            echo "Contents of ios-output:"
+            find ./ios-output -type f
+            exit 1
+          fi
           echo "zip_path=$ZIP" >> $GITHUB_OUTPUT
+          echo "Found zip: $ZIP"
 
       - name: Check for Apple certificates
         id: check_certs
@@ -266,8 +292,23 @@ jobs:
         run: |
           unzip "${{ steps.find_zip.outputs.zip_path }}" -d ios-xcode
           PROJ=$(find ios-xcode -name "*.xcodeproj" | head -1)
+          if [[ -z "$PROJ" ]]; then
+            echo "Error: No .xcodeproj found"
+            find ios-xcode -type d | head -20
+            exit 1
+          fi
+          echo "Found project: $PROJ"
+          
           SCHEME=$(xcodebuild -list -project "$PROJ" \
             | awk '/Schemes:/,0' | sed -n '2p' | xargs)
+          if [[ -z "$SCHEME" ]]; then
+            echo "Error: No scheme found"
+            xcodebuild -list -project "$PROJ"
+            exit 1
+          fi
+          echo "Using scheme: $SCHEME"
+          
+          # Archive the app
           xcodebuild \
             -project "$PROJ" -scheme "$SCHEME" \
             -configuration Release \
@@ -276,6 +317,8 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             PROVISIONING_PROFILE_SPECIFIER="${{ secrets.APPLE_PROVISIONING_PROFILE }}" \
             CODE_SIGN_IDENTITY="iPhone Distribution"
+          
+          # Export the archive
           xcodebuild \
             -exportArchive \
             -archivePath ios-archive.xcarchive \
