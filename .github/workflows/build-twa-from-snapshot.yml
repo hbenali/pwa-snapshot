@@ -82,11 +82,6 @@ jobs:
           fi
 
   # ─────────────────────────────────────────────
-  # Reusable step: fetch + extract snapshot
-  # (inlined in both jobs since runners can't share workspace)
-  # ─────────────────────────────────────────────
-
-  # ─────────────────────────────────────────────
   # Job 1 — Android TWA (.aab)
   # ─────────────────────────────────────────────
   build-android:
@@ -222,8 +217,17 @@ jobs:
           ZIP=$(find ./ios-output -name "*.zip" | head -1)
           echo "zip_path=$ZIP" >> $GITHUB_OUTPUT
 
-      - name: Import signing certificate (optional)
-        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' }}
+      - name: Check for Apple certificates
+        id: check_certs
+        run: |
+          if [[ -n "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" ]]; then
+            echo "has_certs=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_certs=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Import signing certificate
+        if: steps.check_certs.outputs.has_certs == 'true'
         run: |
           echo "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" | base64 --decode > cert.p12
           security create-keychain -p "" build.keychain
@@ -237,8 +241,29 @@ jobs:
             -S apple-tool:,apple:,codesign: -s -k "" \
             ~/Library/Keychains/build.keychain
 
-      - name: Build .ipa (optional)
-        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' }}
+      - name: Create ExportOptions.plist
+        if: steps.check_certs.outputs.has_certs == 'true'
+        run: |
+          cat > ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${{ secrets.APPLE_BUNDLE_ID }}</key>
+              <string>${{ secrets.APPLE_PROVISIONING_PROFILE }}</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Build .ipa
+        if: steps.check_certs.outputs.has_certs == 'true'
         run: |
           unzip "${{ steps.find_zip.outputs.zip_path }}" -d ios-xcode
           PROJ=$(find ios-xcode -name "*.xcodeproj" | head -1)
@@ -265,8 +290,8 @@ jobs:
           path: ${{ steps.find_zip.outputs.zip_path }}
           retention-days: 30
 
-      - name: Upload .ipa (if built)
-        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' }}
+      - name: Upload .ipa
+        if: steps.check_certs.outputs.has_certs == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ios-ipa
