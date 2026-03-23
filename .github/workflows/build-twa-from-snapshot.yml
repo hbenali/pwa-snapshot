@@ -204,6 +204,7 @@ jobs:
       - name: Install PWABuilder CLI + serve
         run: npm install -g @pwabuilder/cli serve
 
+      - name: Serve snapshot locally
         run: |
           serve snapshot/ -p 8765 &
           sleep 2
