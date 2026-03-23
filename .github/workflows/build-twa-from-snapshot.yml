@@ -56,11 +56,10 @@ jobs:
         run: |
           mkdir -p dist
           docker run --rm \
-            -e PWA_URL="${{ inputs.pwa_url }}" \
             -e ICON_SIZES="48,72,96,144,192,512" \
             -e VERBOSE="1" \
             -v ${{ github.workspace }}/dist:/output \
-            pwa-snapshot
+            pwa-snapshot ${{ inputs.pwa_url }}
           echo "── Snapshot produced ──"
           ls -lh dist/
 
